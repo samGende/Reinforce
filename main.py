@@ -3,13 +3,13 @@ import torch
 from reinforce import collect_samples, calculate_advantages, train
 from model import Policy
 
-env = gym.make("CartPole-v1")
+env = gym.make("CartPole-v0")
 observation, info = env.reset()
 
 policy = Policy(4, 2)
-optimizer = torch.optim.Adam(policy.parameters(), lr=0.005)
+optimizer = torch.optim.Adam(policy.parameters(), lr=0.001)
 
-train(env, policy, 64, 50000, optimizer)
+train(env, policy, 256, 50000, optimizer)
 
 
 # evaluate
