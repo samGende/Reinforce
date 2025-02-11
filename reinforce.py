@@ -1,4 +1,5 @@
 import torch
+import numpy as np
 
 #collect samples 
 def collect_samples(env, policy, n_samples = 64, previous_observation = None):
@@ -38,7 +39,7 @@ def collect_samples(env, policy, n_samples = 64, previous_observation = None):
                 observation = torch.tensor(observation, dtype=torch.float)
             if samples >= n_samples:
                 break
-    return obs, actions, rewards, terms
+    return  torch.stack(obs), torch.tensor(actions), torch.tensor(rewards), np.array(terms)
 
 
 #callculte rewards 
@@ -55,7 +56,7 @@ def calculate_advantages(rewards, terminated,  gamma = 0.9999, normed = True):
     advantages = torch.tensor(advantages, dtype=torch.float)
     if normed:
         advantages = (advantages - advantages.mean()) / (advantages.std() + 1e-8)
-    return advantages
+    return torch.tensor(advantages)
 
 def calc_discount_rewards(rewards):
     gamma = .9999
@@ -80,12 +81,19 @@ def calc_mean_episode_reward(rewards, terms, prev_reward = 0):
 
     return torch.tensor(episode_rewards, dtype=torch.float).mean(), prev_reward
 
+def generate_batches(batch_size, mini_batch_size):
+    batch_start = range(0, batch_size, mini_batch_size)
+    indices = np.arange(batch_size)
+    np.random.shuffle(indices)
+    batches = [indices[i:i+ mini_batch_size] for i in batch_start]
+    return batches
+
 def train(env, policy, batch_size, n_steps, optimizer, normed_advatages = True):
     steps = 0
     obs = None
     prev_reward = 0
     while steps < n_steps:
-        if obs:
+        if obs != None:
             previous_observation = obs[-1]
         else:
             previous_observation = None
@@ -94,19 +102,19 @@ def train(env, policy, batch_size, n_steps, optimizer, normed_advatages = True):
         mean_reward, prev_reward = calc_mean_episode_reward(rewards, terms, prev_reward)
         print('mean reward: ', mean_reward)
 
-        #just as broken using calc_discount_rewards
         advantages = calculate_advantages(rewards, terms, normed_advatages)
+        batches = generate_batches(batch_size, 64)
 
-        # train the policy
-        for state, action, discounted_reward in zip(obs, actions, advantages):
-            # get probs from model
-            probs = policy(state)
-            dist = torch.distributions.Categorical(probs=probs)
-            log_prob = dist.log_prob(torch.tensor(action, dtype=torch.int))
-            # calc loss from probs
-            loss = -log_prob*discounted_reward
+        for batch in batches:
+            probs = policy(obs[batch])
+
+            dists = torch.distributions.Categorical(probs=probs)
+            log_probs = dists.log_prob(actions[batch])
+
+            loss = -log_probs*advantages[batch]
             optimizer.zero_grad()
-            loss.backward()
-            # update model
+            loss.mean().backward() 
             optimizer.step()
+
+      
         steps += batch_size
