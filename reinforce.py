@@ -7,6 +7,7 @@ def collect_samples(env, policy, n_samples = 64, previous_observation = None):
     actions = []
     rewards = []
     terms = []
+    probs_list = []
     if (previous_observation != None):
         observation = previous_observation
     else:
@@ -28,6 +29,7 @@ def collect_samples(env, policy, n_samples = 64, previous_observation = None):
             episode_over = terminated or truncated
             # store the sample
             obs.append(observation)
+            probs_list.append(probs)
             actions.append(action)
             rewards.append(reward)
             terms.append(episode_over)
@@ -39,7 +41,7 @@ def collect_samples(env, policy, n_samples = 64, previous_observation = None):
                 observation = torch.tensor(observation, dtype=torch.float)
             if samples >= n_samples:
                 break
-    return  torch.stack(obs), torch.tensor(actions), torch.tensor(rewards), np.array(terms)
+    return  torch.stack(obs), torch.stack(probs_list), torch.tensor(actions), torch.tensor(rewards), np.array(terms)
 
 
 #callculte rewards 
@@ -97,8 +99,7 @@ def train(env, policy, batch_size, n_steps, optimizer, normed_advatages = True):
             previous_observation = obs[-1]
         else:
             previous_observation = None
-        obs, actions, rewards, terms = collect_samples(env, policy, batch_size, previous_observation)
-        print(len(obs))
+        obs, old_probs, actions, rewards, terms = collect_samples(env, policy, batch_size, previous_observation)
         mean_reward, prev_reward = calc_mean_episode_reward(rewards, terms, prev_reward)
         print('mean reward: ', mean_reward)
 
@@ -106,12 +107,26 @@ def train(env, policy, batch_size, n_steps, optimizer, normed_advatages = True):
         batches = generate_batches(batch_size, 64)
 
         for batch in batches:
+            #new probs 
             probs = policy(obs[batch])
-
             dists = torch.distributions.Categorical(probs=probs)
             log_probs = dists.log_prob(actions[batch])
 
-            loss = -log_probs*advantages[batch]
+            #old probs 
+            old_dists = torch.distributions.Categorical(probs= old_probs[batch].detach())
+            old_log_probs = old_dists.log_prob(actions[batch])
+
+            #prob ratio r(t)
+            r_t = log_probs.exp() / old_log_probs.exp()
+
+            policy_clip = 0.2
+
+            loss = r_t*advantages[batch]
+            clipped_loss = torch.clamp(r_t, 1- policy_clip, 1+policy_clip) * advantages[batch]
+            
+            loss = - torch.min(loss, clipped_loss)
+
+
             optimizer.zero_grad()
             loss.mean().backward() 
             optimizer.step()
