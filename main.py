@@ -14,6 +14,7 @@ train(env, policy, 256, 500000, optimizer)
 
 # evaluate
 
+env = gym.make("CartPole-v0", render_mode = "human")
 for i in range(5):
     observation, info = env.reset()
     done = False

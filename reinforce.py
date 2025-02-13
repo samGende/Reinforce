@@ -101,7 +101,7 @@ def train(env, policy, batch_size, n_steps, optimizer, normed_advatages = True):
             previous_observation = None
         obs, old_probs, actions, rewards, terms = collect_samples(env, policy, batch_size, previous_observation)
         mean_reward, prev_reward = calc_mean_episode_reward(rewards, terms, prev_reward)
-        print('mean reward: ', mean_reward)
+        print(f'mean batch reward: {mean_reward.item():.2f}')
 
         advantages = calculate_advantages(rewards, terms, normed_advatages)
         batches = generate_batches(batch_size, 64)
