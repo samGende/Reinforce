@@ -1,7 +1,7 @@
 import gymnasium as gym
 import torch
 from reinforce import collect_samples, calculate_advantages, train, generate_batches
-from model import Policy
+from BaseRL.model import Policy
 
 env = gym.make("CartPole-v0")
 observation, info = env.reset()
