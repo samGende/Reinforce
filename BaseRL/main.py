@@ -1,15 +1,16 @@
 import gymnasium as gym
 import torch
-from reinforce import collect_samples, calculate_advantages, train, generate_batches
-from BaseRL.model import Policy
-
+from reinforce import  Reinforce
+from model import Policy
 env = gym.make("CartPole-v0")
 observation, info = env.reset()
 
 policy = Policy(4, 2)
 optimizer = torch.optim.Adam(policy.parameters(), lr=0.001)
 
-train(env, policy, 256, 500000, optimizer)
+reinforce = Reinforce(env, policy, 256,  optimizer)
+
+reinforce.train(5000)
 
 
 # evaluate
