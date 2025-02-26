@@ -1,50 +1,26 @@
 import gymnasium as gym
 import torch
-from BaseRL.model import Policy
+from gsm8k import GSM8K_Env
+from transformers import AutoModelForCausalLM, AutoTokenizer
 from t_reinforce import TReinforce
-import wandb
+# importing the library
+import faulthandler
+faulthandler.enable()
 
-#hyperparams 
-lr = 0.001
-env_name = "CartPole-v1"
-batch_size = 256
+if __name__ == '__main__':
 
-logging = True
 
-env = gym.make(env_name)
-observation, info = env.reset()
+    model_name = 'meta-llama/Llama-3.2-1B'  # Replace with your desired model variant
+    tokenizer = AutoTokenizer.from_pretrained(model_name)
+    max_tokens = 5
+    env = GSM8K_Env(tokenizer=tokenizer, max_tokens=max_tokens)
+    env.reset()
+    model = AutoModelForCausalLM.from_pretrained(model_name)
+    optimizer = torch.optim.Adam(model.parameters(), lr =0.0001)
 
-policy = Policy(4, 2)
-optimizer = torch.optim.Adam(policy.parameters(), lr=lr)
 
-if(logging):
-    wandb.init(
-        # set the wandb project where this run will be logged
-        project="my-awesome-RL",
+    reinforce = TReinforce(env, model, tokenizer, 4, optimizer, True, max_tokens=5)
 
-        # track hyperparameters and run metadata
-        config={
-        "learning_rate": lr,
-        "env": env_name,
-        "batch_size": batch_size,
-        }
-    )
+    reinforce.train(1000)
 
-t_reinforce = TReinforce(env, policy, batch_size=batch_size, optimizer=optimizer, logging=logging)
-t_reinforce.train(500000)
-
-# evaluate
-
-env = gym.make(env_name, render_mode = "human")
-for i in range(5):
-    observation, info = env.reset()
-    done = False
-    rewards = []
-    while not done:
-        probs = policy(torch.tensor(observation, dtype=torch.float))
-        action = torch.distributions.Categorical(probs=probs).sample().item()
-        observation, reward, done, truncated, info = env.step(action)
-        rewards.append(reward)
-        done = done or truncated
-    print("Reward: ", sum(rewards))
-
+    model.save_predtrained('first_llama')

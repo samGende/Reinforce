@@ -1,49 +1,54 @@
 import torch
 import numpy as np
 import wandb
+from utils.math import softmax_temp, pad_sequence
+from memory_profiler import profile
+from utils.loggin import log_memory_usage
+
 
 class TReinforce:
-    def __init__(self, env, policy, batch_size, optimizer, normed_advantages=True, logging=False):
+    def __init__(self, env, policy, tokenizer, batch_size, optimizer, normed_advantages=True, logging=False, max_tokens=5, temp=1.5, n_shot = 2):
         self.env = env
         self.policy = policy
+        self.tokenizer = tokenizer
         self.batch_size = batch_size
         self.optimizer = optimizer
         self.normed_advantages = normed_advantages
         self.prev_reward = 0
         self.previous_observation = None
         self.logging = logging
+        self.max_tokens = max_tokens
+        self.temp = temp
+        self.n_shot = n_shot
+    def collect_samples(self, n_shots=4):
+        observations, actions, rewards, terms, probs_list = [], [], [], [], []
+        
+        self.env.reset()
 
-    def collect_samples(self, n_samples=64):
-        obs, actions, rewards, terms, probs_list = [], [], [], [], []
-        observation = self.previous_observation if self.previous_observation is not None else self.env.reset()[0]
-        observation = torch.tensor(observation, dtype=torch.float)
-        samples = 0
+        #loop through each shot
+        for i in range(0, n_shots):
+            print(f'shot {i}')
+            obs = self.env.clear()
+            term = False
+            while not term:
+                outputs = self.policy(obs)
+                probs = softmax_temp(outputs.logits[0, -1], self.temp)
+                dist = torch.distributions.Categorical(probs)
+                action = dist.sample()
+                action_tensor = action.unsqueeze(0).unsqueeze(0)
+                next_obs, reward = self.env.step(action_tensor)
+                term = (action == self.tokenizer.eos_token_id or self.env.n_tokens >= self.max_tokens)
 
-        while samples < n_samples:
-            episode_over = False
-            while not episode_over:
-                probs = self.policy(observation)
-                action = torch.distributions.Categorical(probs=probs).sample().item()
-                next_observation, reward, terminated, truncated, _ = self.env.step(action)
-                next_observation = torch.tensor(next_observation, dtype=torch.float)
-                episode_over = terminated or truncated
 
-                obs.append(observation)
-                probs_list.append(probs)
+                observations.append(obs)
                 actions.append(action)
                 rewards.append(reward)
-                terms.append(episode_over)
-
-                observation = next_observation
-                samples += 1
-                
-                if episode_over:
-                    observation = torch.tensor(self.env.reset()[0], dtype=torch.float)
-                if samples >= n_samples:
-                    break
-
-        self.previous_observation = observation
-        return torch.stack(obs), torch.stack(probs_list), torch.tensor(actions), torch.tensor(rewards), np.array(terms)
+                terms.append(term)
+                probs_list.append(probs)
+                obs = next_obs
+                print(f'tokens generated: {self.env.n_tokens}')
+                log_memory_usage()
+        return pad_sequence(observations), torch.stack(probs_list), torch.tensor(actions), torch.tensor(rewards), np.array(terms)
 
     def calc_advantages(self, rewards, terminated, gamma=0.9999):
         discounted_rewards, prev_reward = [], 0
@@ -80,17 +85,22 @@ class TReinforce:
         steps = 0
         mean_reward = 0
         while steps < n_steps:
-            obs, old_probs, actions, rewards, terms = self.collect_samples(self.batch_size)
+            obs, old_probs, actions, rewards, terms = self.collect_samples(self.n_shot)
             mean_reward = self.calc_mean_episode_reward(rewards, terms, mean_reward)
             print(f'mean batch reward: {mean_reward.item():.2f}')
             
             advantages = self.calc_advantages(rewards, terms)
-            batches = self.generate_batches(self.batch_size, 64)
+            batches = self.generate_batches(self.batch_size, 2)
             losses = []
 
+            print(obs.shape)
+            print(old_probs.shape)
             for batch in batches:
-                probs = self.policy(obs[batch])
-                dists = torch.distributions.Categorical(probs=probs)
+                outputs = self.policy(obs[batch])
+                print(f'logts shape {outputs.logits.shape}')
+                probs = softmax_temp(outputs.logits[:,-1, :], self.temp)
+                print(f'new probs shaep {probs.shape}')
+                dists = torch.distributions.Categorical(probs)
                 log_probs = dists.log_prob(actions[batch])
                 old_dists = torch.distributions.Categorical(probs=old_probs[batch].detach())
                 old_log_probs = old_dists.log_prob(actions[batch])

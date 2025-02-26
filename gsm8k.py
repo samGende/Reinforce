@@ -2,18 +2,19 @@ import faulthandler
 import sys
 from utils.strings import extract_answer
 import json
+import random
 faulthandler.enable(file=sys.stderr, all_threads=True)
-
 from datasets import load_dataset
+import torch
 
-print(f'faulhandler status {faulthandler.is_enabled()}')
-ds = load_dataset("openai/gsm8k", "main")
-test = ds['test']
+
+
 
 class GSM8K_evaluation:
     def __init__(self):
         ds = load_dataset("openai/gsm8k", "main")
         self.test = ds['test']
+        random.seed(10)
 
     def eval(self, model, n_evals=3, output_file="evaluation_results.json"):
         results = []
@@ -44,3 +45,63 @@ class GSM8K_evaluation:
             json.dump(results, f, indent=4)
         
         return sum(correct_answers) / n_evals, correct_answers
+
+
+class GSM8K_Env:
+    def __init__(self, tokenizer, max_tokens):
+        ds = load_dataset("openai/gsm8k", "main")
+        self.train = ds['train'].shuffle(seed=42)
+        self.tokenizer = tokenizer
+        #current index
+        self.cur = 0
+        self.state = -1
+        self.n_tokens = 0
+        self.max_tokens = max_tokens
+    '''
+    reset the envs state and move to new prompt
+    ''' 
+    def reset(self):
+        if self.cur < len(self.train):
+            self.cur += 1
+        else: 
+            self.cur = 0
+        return self.clear()
+    '''
+    clear the envs state which removes any model generations
+    '''
+    def clear(self):
+        self.n_tokens = 0
+        inputs = self.tokenizer(self.train[self.cur]['question'], return_tensors='pt')
+        if 'input_ids' in inputs:
+            self.state = inputs['input_ids']
+            return self.state
+        else:
+            return -1
+
+    
+    def step(self, next_token):
+        self.n_tokens += 1
+        self.state = torch.cat((self.state, next_token), dim=-1)
+        reward = self.get_reward()
+        self.cur +=1
+        #return next prompt in training data
+        return self.state, reward
+    
+    def render(self):
+        print(self.tokenizer.decode(self.state[0]))
+
+    def get_state(self):
+        return self.tokenizer.decode(self.state[0])
+
+    def get_reward(self):
+        if len(self.state) == self.max_tokens and self.state[0,-1] != self.tokenizer.eos_token_id:
+            return -1    
+        completion = self.tokenizer.decode(self.state[0])
+        #calc reward for completion 
+        proposed_answer = extract_answer(completion)
+        #extract correct anwer
+        correct_answer = extract_answer(self.train[self.cur]['answer'])
+        if(correct_answer == proposed_answer):
+            return 1
+        else:
+            return 0.1
