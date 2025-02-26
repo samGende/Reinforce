@@ -49,11 +49,12 @@ class GSM8K_evaluation:
 
 class GSM8K_Env:
     def __init__(self, tokenizer, max_tokens):
-        ds = load_dataset("openai/gsm8k", "main")
+        ds = load_dataset("openai/gsm8k", "main", streaming=True)
         self.train = ds['train'].shuffle(seed=42)
+        self.train_iter = iter(self.train)
         self.tokenizer = tokenizer
         #current index
-        self.cur = 0
+        self.cur = None
         self.state = -1
         self.n_tokens = 0
         self.max_tokens = max_tokens
@@ -61,17 +62,14 @@ class GSM8K_Env:
     reset the envs state and move to new prompt
     ''' 
     def reset(self):
-        if self.cur < len(self.train):
-            self.cur += 1
-        else: 
-            self.cur = 0
+        self.cur = next(self.train_iter)
         return self.clear()
     '''
     clear the envs state which removes any model generations
     '''
     def clear(self):
         self.n_tokens = 0
-        inputs = self.tokenizer(self.train[self.cur]['question'], return_tensors='pt')
+        inputs = self.tokenizer(self.cur['question'], return_tensors='pt')
         if 'input_ids' in inputs:
             self.state = inputs['input_ids']
             return self.state
@@ -83,7 +81,6 @@ class GSM8K_Env:
         self.n_tokens += 1
         self.state = torch.cat((self.state, next_token), dim=-1)
         reward = self.get_reward()
-        self.cur +=1
         #return next prompt in training data
         return self.state, reward
     
@@ -100,7 +97,7 @@ class GSM8K_Env:
         #calc reward for completion 
         proposed_answer = extract_answer(completion)
         #extract correct anwer
-        correct_answer = extract_answer(self.train[self.cur]['answer'])
+        correct_answer = extract_answer(self.cur['answer'])
         if(correct_answer == proposed_answer):
             return 1
         else:
