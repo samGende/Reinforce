@@ -32,23 +32,25 @@ class TReinforce:
             obs = self.env.clear()
             term = False
             while not term:
-                outputs = self.policy(obs)
-                probs = softmax_temp(outputs.logits[0, -1], self.temp)
-                dist = torch.distributions.Categorical(probs)
-                action = dist.sample()
-                action_tensor = action.unsqueeze(0).unsqueeze(0)
-                next_obs, reward = self.env.step(action_tensor)
-                term = (action == self.tokenizer.eos_token_id or self.env.n_tokens >= self.max_tokens)
+                with torch.no_grad():
+                    outputs = self.policy(obs)
+                    probs = softmax_temp(outputs.logits[0, -1], self.temp)
+                    dist = torch.distributions.Categorical(probs)
+                    action = dist.sample()
+                    action_tensor = action.unsqueeze(0).unsqueeze(0)
+                    next_obs, reward = self.env.step(action_tensor)
+                    term = (action == self.tokenizer.eos_token_id or self.env.n_tokens >= self.max_tokens)
 
 
-                observations.append(obs)
-                actions.append(action)
-                rewards.append(reward)
-                terms.append(term)
-                probs_list.append(probs)
-                obs = next_obs
-                print(f'tokens generated: {self.env.n_tokens}')
-                log_memory_usage()
+                    observations.append(obs)
+                    actions.append(action)
+                    rewards.append(reward)
+                    terms.append(term)
+                    probs_list.append(probs)
+
+                    obs = next_obs
+                    print(f'tokens generated: {self.env.n_tokens}')
+                    log_memory_usage()
         return pad_sequence(observations), torch.stack(probs_list), torch.tensor(actions), torch.tensor(rewards), np.array(terms)
 
     def calc_advantages(self, rewards, terminated, gamma=0.9999):
