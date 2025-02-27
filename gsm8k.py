@@ -91,8 +91,8 @@ class GSM8K_Env:
         return self.tokenizer.decode(self.state[0])
 
     def get_reward(self):
-        if len(self.state) == self.max_tokens and self.state[0,-1] != self.tokenizer.eos_token_id:
-            return -1    
+        if self.n_tokens >= self.max_tokens and self.state[0,-1] != self.tokenizer.eos_token_id:
+            return -10    
         completion = self.tokenizer.decode(self.state[0])
         #calc reward for completion 
         proposed_answer = extract_answer(completion)
