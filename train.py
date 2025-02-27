@@ -3,24 +3,46 @@ import torch
 from gsm8k import GSM8K_Env
 from transformers import AutoModelForCausalLM, AutoTokenizer
 from t_reinforce import TReinforce
+from peft import LoraConfig, TaskType, get_peft_model
+import argparse
+
 # importing the library
 import faulthandler
 faulthandler.enable()
 
 if __name__ == '__main__':
 
+    parser = argparse.ArgumentParser(description='Train a model with lora or the whole model')
+    parser.add_argument('--lora', type=bool, help='The model name to train')
+    args = parser.parse_args()
+    lora = args.lora
+
 
     model_name = 'meta-llama/Llama-3.2-1B'  # Replace with your desired model variant
     tokenizer = AutoTokenizer.from_pretrained(model_name)
-    max_tokens = 5
+    model = AutoModelForCausalLM.from_pretrained(model_name)
+
+    if lora:
+        print('starting training with lora')
+        lora_config = LoraConfig(
+        r=16,
+        target_modules=["q_proj", "v_proj"],
+        task_type=TaskType.CAUSAL_LM,
+        lora_alpha=32,
+        lora_dropout=0.0
+    )
+        model = get_peft_model(model, lora_config)
+
+
+    max_tokens = 200
     env = GSM8K_Env(tokenizer=tokenizer, max_tokens=max_tokens)
     env.reset()
-    model = AutoModelForCausalLM.from_pretrained(model_name)
     optimizer = torch.optim.Adam(model.parameters(), lr =0.0001)
 
 
-    reinforce = TReinforce(env, model, tokenizer, 4, optimizer, True, max_tokens=5)
 
-    reinforce.train(1000)
+    reinforce = TReinforce(env, model, tokenizer, 4, optimizer, True, max_tokens=5, use_lora=lora)
+
+    reinforce.train(10000)
 
     model.save_predtrained('first_llama')

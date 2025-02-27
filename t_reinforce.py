@@ -7,7 +7,7 @@ from utils.loggin import log_memory_usage
 
 
 class TReinforce:
-    def __init__(self, env, policy, tokenizer, batch_size, optimizer, normed_advantages=True, logging=False, max_tokens=5, temp=1.5, n_shot = 2):
+    def __init__(self, env, policy, tokenizer, batch_size, optimizer, normed_advantages=True, logging=False, max_tokens=200, temp=1.5, n_shot = 4, use_lora=False):
         self.env = env
         self.policy = policy
         self.tokenizer = tokenizer
@@ -20,6 +20,7 @@ class TReinforce:
         self.max_tokens = max_tokens
         self.temp = temp
         self.n_shot = n_shot
+        self.use_lora = use_lora
     def collect_samples(self, n_shots=4):
         observations, actions, rewards, terms, probs_list = [], [], [], [], []
         
@@ -111,6 +112,8 @@ class TReinforce:
                 self.optimizer.zero_grad()
                 loss.mean().backward()
                 self.optimizer.step()
+
+                # add lora adapt step NOTE lora step may only be for adaLora
                 losses.append(loss.detach().mean())
             if(self.logging):
                 wandb.log({"loss": np.mean(losses), "rewards": mean_reward.item()})
