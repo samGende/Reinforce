@@ -21,6 +21,10 @@ class TReinforce:
         self.temp = temp
         self.n_shot = n_shot
         self.use_lora = use_lora
+        if logging:
+            config = {"model":policy.config._name_or_path, "batch_size": batch_size, "mini_batch_size": mini_batch_size, "normed_advantages": normed_advantages, "max_tokens": max_tokens, "temp": temp, "n_shot": n_shot, "use_lora": use_lora}
+            wandb.init(project='my-awesome-rl', entity='sam-gende-tu-dortmund', name='t_reinforce', config = config)
+            wandb.watch(self.policy)
     def collect_samples(self, n_shots=4):
         observations, actions, rewards, terms, probs_list = [], [], [], [], []
         
