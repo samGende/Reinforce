@@ -24,6 +24,8 @@ if __name__ == '__main__':
 
     if lora:
         print('starting training with lora')
+        #fix no grad issue
+        model.enable_input_require_grads()
         lora_config = LoraConfig(
         r=16,
         target_modules=["q_proj", "v_proj"],
@@ -31,17 +33,18 @@ if __name__ == '__main__':
         lora_alpha=32,
         lora_dropout=0.0
     )
-        model = get_peft_model(model, lora_config)
+        adapter= "r++"
+        model = get_peft_model(model, lora_config, adapter)
 
 
-    max_tokens = 200
+    max_tokens = 4
     env = GSM8K_Env(tokenizer=tokenizer, max_tokens=max_tokens)
     env.reset()
-    optimizer = torch.optim.Adam(model.parameters(), lr =0.0001)
+    optimizer = torch.optim.Adam(model.parameters(), lr =0.1)
 
 
 
-    reinforce = TReinforce(env, model, tokenizer, 800, 64, optimizer, True, logging=True, max_tokens=max_tokens, use_lora=lora)
+    reinforce = TReinforce(env, model, tokenizer, 800, 64, optimizer, True, logging=True, max_tokens=max_tokens, use_lora=lora, adatper=adapter)
 
     reinforce.train(10000)
 

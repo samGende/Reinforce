@@ -7,7 +7,7 @@ from utils.loggin import log_memory_usage
 
 
 class TReinforce:
-    def __init__(self, env, policy, tokenizer, batch_size, mini_batch_size, optimizer, normed_advantages=True, logging=False, max_tokens=200, temp=1.5, n_shot = 4, use_lora=False):
+    def __init__(self, env, policy, tokenizer, batch_size, mini_batch_size, optimizer, normed_advantages=True, logging=False, max_tokens=200, temp=1.5, n_shot = 4, kl_scale= 0.1, use_lora=False, adapter=None):
         self.env = env
         self.policy = policy
         self.tokenizer = tokenizer
@@ -21,8 +21,10 @@ class TReinforce:
         self.temp = temp
         self.n_shot = n_shot
         self.use_lora = use_lora
+        self.adapter = adapter
+        self.kl_scale = kl_scale
         if logging:
-            config = {"model":policy.config._name_or_path, "batch_size": batch_size, "mini_batch_size": mini_batch_size, "normed_advantages": normed_advantages, "max_tokens": max_tokens, "temp": temp, "n_shot": n_shot, "use_lora": use_lora}
+            config = {"model":policy.config._name_or_path, "batch_size": batch_size, "mini_batch_size": mini_batch_size, "normed_advantages": normed_advantages, "max_tokens": max_tokens, "temp": temp, "n_shot": n_shot, "use_lora": use_lora, kl_scale: kl_scale}
             wandb.init(project='my-awesome-rl', entity='sam-gende-tu-dortmund', name='t_reinforce', config = config)
             wandb.watch(self.policy)
     def collect_samples(self, n_shots=4):
@@ -36,7 +38,7 @@ class TReinforce:
             obs = self.env.clear()
             term = False
             while not term:
-                with torch.no_grad():
+                #with torch.no_grad():
                     outputs = self.policy(obs)
                     probs = softmax_temp(outputs.logits[0, -1], self.temp)
                     dist = torch.distributions.Categorical(probs)
@@ -44,6 +46,30 @@ class TReinforce:
                     action_tensor = action.unsqueeze(0).unsqueeze(0)
                     next_obs, reward = self.env.step(action_tensor)
                     term = (action == self.tokenizer.eos_token_id or self.env.n_tokens >= self.max_tokens)
+                    
+                    #if use lora enable kl penalty
+                    if(self.use_lora):
+                        #forward pass with base model
+                        self.policy.disable_adapter_layers()
+                        outputs_base = self.policy(obs)
+                        probs_base = softmax_temp(outputs_base.logits[0, -1], self.temp)
+                        dist_base = torch.distributions.Categorical(probs_base)
+                        #log probs
+                        base_log = dist_base.log_prob(action)
+                        log = dist.log_prob(action)
+                        #calc kl diff 
+                        # https://pytorch.org/docs/stable/generated/torch.nn.KLDivLoss.html
+                        kl_diff = log.exp()* (log - base_log)
+                        print(f'kl diff {kl_diff}')
+
+                        #adjus reward by kl diff 
+                        reward = reward - self.kl_scale *  kl_diff.item()
+
+                        #enable adapter layers
+                        self.policy.enable_adapter_layers()
+                        if (self.logging):
+                            wandb.log({"kl_diff": kl_diff.item()})
+
 
 
                     observations.append(obs)
@@ -53,8 +79,6 @@ class TReinforce:
                     probs_list.append(probs)
 
                     obs = next_obs
-                    print(f'tokens generated: {self.env.n_tokens}')
-                    log_memory_usage()
         return pad_sequence(observations), torch.stack(probs_list), torch.tensor(actions), torch.tensor(rewards), np.array(terms)
 
     def calc_advantages(self, rewards, terminated, gamma=0.9999):
@@ -104,9 +128,7 @@ class TReinforce:
             print(old_probs.shape)
             for batch in batches:
                 outputs = self.policy(obs[batch])
-                print(f'logts shape {outputs.logits.shape}')
                 probs = softmax_temp(outputs.logits[:,-1, :], self.temp)
-                print(f'new probs shaep {probs.shape}')
                 dists = torch.distributions.Categorical(probs)
                 log_probs = dists.log_prob(actions[batch])
                 old_dists = torch.distributions.Categorical(probs=old_probs[batch].detach())
