@@ -5,3 +5,4 @@ https://arxiv.org/html/2501.03262v1
 ## Roadmap
 - [ ] KL Penatly
 - [ ] SFT for GSM8K
+- [ ] Toggle sparse rewards
