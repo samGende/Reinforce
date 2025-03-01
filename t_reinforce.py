@@ -7,7 +7,7 @@ from utils.loggin import log_memory_usage
 
 
 class TReinforce:
-    def __init__(self, env, policy, tokenizer, batch_size, mini_batch_size, optimizer, normed_advantages=True, logging=False, max_tokens=200, temp=1.5, n_shot = 4, kl_scale= 0.1, use_lora=False, adapter=None):
+    def __init__(self, env, policy, tokenizer, batch_size, mini_batch_size, optimizer, normed_advantages=True, logging=False, max_tokens=200, temp=1.5, n_shot = 4, kl_scale= 0.1, use_lora=False, adapter=None, run_num =0):
         self.env = env
         self.policy = policy
         self.tokenizer = tokenizer
@@ -25,7 +25,7 @@ class TReinforce:
         self.kl_scale = kl_scale
         if logging:
             config = {"model":policy.config._name_or_path, "batch_size": batch_size, "mini_batch_size": mini_batch_size, "normed_advantages": normed_advantages, "max_tokens": max_tokens, "temp": temp, "n_shot": n_shot, "use_lora": use_lora, kl_scale: kl_scale}
-            wandb.init(project='my-awesome-rl', entity='sam-gende-tu-dortmund', name='t_reinforce', config = config)
+            wandb.init(project='my-awesome-rl', entity='sam-gende-tu-dortmund', name=f't_reinforce{run_num}', config = config)
             wandb.watch(self.policy)
     def collect_samples(self, n_shots=4):
         observations, actions, rewards, terms, probs_list = [], [], [], [], []
@@ -60,7 +60,6 @@ class TReinforce:
                         #calc kl diff 
                         # https://pytorch.org/docs/stable/generated/torch.nn.KLDivLoss.html
                         kl_diff = log.exp()* (log - base_log)
-                        print(f'kl diff {kl_diff}')
 
                         #adjus reward by kl diff 
                         reward = reward - self.kl_scale *  kl_diff.item()
@@ -121,7 +120,9 @@ class TReinforce:
             print(f'mean batch reward: {mean_reward.item():.2f}')
             
             advantages = self.calc_advantages(rewards, terms)
-            batches = self.generate_batches(self.batch_size, 2)
+            #TODO batch size should probably not be dependent on len of responses 
+            batch_size = min(obs.shape[0], self.batch_size)
+            batches = self.generate_batches(batch_size, self.mini_batch_size)
             losses = []
 
             print(obs.shape)
