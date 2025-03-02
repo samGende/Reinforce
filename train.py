@@ -37,14 +37,14 @@ if __name__ == '__main__':
         model = get_peft_model(model, lora_config, adapter)
 
 
-    max_tokens = 4
+    max_tokens =200 
     env = GSM8K_Env(tokenizer=tokenizer, max_tokens=max_tokens)
     env.reset()
     optimizer = torch.optim.Adam(model.parameters(), lr =0.1)
 
 
 
-    reinforce = TReinforce(env, model, tokenizer, 800, 64, optimizer, True, logging=True, max_tokens=max_tokens, use_lora=lora, adatper=adapter, run_num=0)
+    reinforce = TReinforce(env, model, tokenizer, 800, 64, optimizer, True, logging=True, max_tokens=max_tokens, use_lora=lora, adapter=adapter, run_num=0)
 
     reinforce.train(10000)
 

@@ -12,6 +12,7 @@ class TReinforce:
         self.policy = policy
         self.tokenizer = tokenizer
         self.batch_size = batch_size
+        self.mini_batch_size = mini_batch_size
         self.optimizer = optimizer
         self.normed_advantages = normed_advantages
         self.prev_reward = 0
@@ -24,8 +25,8 @@ class TReinforce:
         self.adapter = adapter
         self.kl_scale = kl_scale
         if logging:
-            config = {"model":policy.config._name_or_path, "batch_size": batch_size, "mini_batch_size": mini_batch_size, "normed_advantages": normed_advantages, "max_tokens": max_tokens, "temp": temp, "n_shot": n_shot, "use_lora": use_lora, kl_scale: kl_scale}
-            wandb.init(project='my-awesome-rl', entity='sam-gende-tu-dortmund', name=f't_reinforce{run_num}', config = config)
+            config = {"model":policy.config._name_or_path, "batch_size": batch_size, "mini_batch_size": mini_batch_size, "normed_advantages": normed_advantages, "max_tokens": max_tokens, "temp": temp, "n_shot": n_shot, "use_lora": use_lora, 'kl_scale': kl_scale}
+            wandb.init(project='my-awesome-rl', entity='sam-gende-tu-dortmund', name='t_reinforce0', config = config)
             wandb.watch(self.policy)
     def collect_samples(self, n_shots=4):
         observations, actions, rewards, terms, probs_list = [], [], [], [], []
