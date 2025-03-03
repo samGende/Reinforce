@@ -44,7 +44,7 @@ if __name__ == '__main__':
 
 
 
-    reinforce = TReinforce(env, model, tokenizer, 800, 64, optimizer, True, logging=True, max_tokens=max_tokens, use_lora=lora, adapter=adapter, run_num=0)
+    reinforce = TReinforce(env, model, tokenizer, 800, 32, optimizer, True, logging=True, max_tokens=max_tokens, use_lora=lora, adapter=adapter, run_num=0)
 
     reinforce.train(10000)
 

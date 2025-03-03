@@ -39,7 +39,7 @@ class TReinforce:
             obs = self.env.clear()
             term = False
             while not term:
-                #with torch.no_grad():
+                with torch.no_grad():
                     outputs = self.policy(obs)
                     probs = softmax_temp(outputs.logits[0, -1], self.temp)
                     dist = torch.distributions.Categorical(probs)
