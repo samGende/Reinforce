@@ -53,6 +53,7 @@ class GSM8K_Env:
         self.train = ds['train'].shuffle(seed=42)
         self.train_iter = iter(self.train)
         self.tokenizer = tokenizer
+        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         #current index
         self.cur = None
         self.state = -1
@@ -72,6 +73,7 @@ class GSM8K_Env:
         inputs = self.tokenizer(self.cur['question'], return_tensors='pt')
         if 'input_ids' in inputs:
             self.state = inputs['input_ids']
+            self.state = self.state.to(self.device)
             return self.state
         else:
             return -1
