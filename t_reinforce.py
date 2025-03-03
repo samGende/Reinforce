@@ -9,7 +9,8 @@ from utils.loggin import log_memory_usage
 class TReinforce:
     def __init__(self, env, policy, tokenizer, batch_size, mini_batch_size, optimizer, normed_advantages=True, logging=False, max_tokens=200, temp=1.5, n_shot = 4, kl_scale= 0.1, use_lora=False, adapter=None, run_num =0):
         self.env = env
-        self.policy = policy
+        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        self.policy = policy.to(self.device)
         self.tokenizer = tokenizer
         self.batch_size = batch_size
         self.mini_batch_size = mini_batch_size
@@ -25,9 +26,10 @@ class TReinforce:
         self.adapter = adapter
         self.kl_scale = kl_scale
         if logging:
-            config = {"model":policy.config._name_or_path, "batch_size": batch_size, "mini_batch_size": mini_batch_size, "normed_advantages": normed_advantages, "max_tokens": max_tokens, "temp": temp, "n_shot": n_shot, "use_lora": use_lora, 'kl_scale': kl_scale}
+            config = {"model":policy.config._name_or_path, "batch_size": batch_size, "mini_batch_size": mini_batch_size, "normed_advantages": normed_advantages, "max_tokens": max_tokens, "temp": temp, "n_shot": n_shot, "use_lora": use_lora, 'kl_scale': kl_scale, "device": self.device.type}
             wandb.init(project='my-awesome-rl', entity='sam-gende-tu-dortmund', name='t_reinforce0', config = config)
             wandb.watch(self.policy)
+            
     def collect_samples(self, n_shots=4):
         observations, actions, rewards, terms, probs_list = [], [], [], [], []
         
@@ -37,6 +39,8 @@ class TReinforce:
         for i in range(0, n_shots):
             print(f'shot {i}')
             obs = self.env.clear()
+            # Move observation to device
+            obs = obs.to(self.device)
             term = False
             while not term:
                 with torch.no_grad():
@@ -46,6 +50,8 @@ class TReinforce:
                     action = dist.sample()
                     action_tensor = action.unsqueeze(0).unsqueeze(0)
                     next_obs, reward = self.env.step(action_tensor)
+                    # Move next observation to device
+                    next_obs = next_obs.to(self.device)
                     term = (action == self.tokenizer.eos_token_id or self.env.n_tokens >= self.max_tokens)
                     
                     #if use lora enable kl penalty
@@ -70,8 +76,6 @@ class TReinforce:
                         if (self.logging):
                             wandb.log({"kl_diff": kl_diff.item()})
 
-
-
                     observations.append(obs)
                     actions.append(action)
                     rewards.append(reward)
@@ -79,7 +83,9 @@ class TReinforce:
                     probs_list.append(probs)
 
                     obs = next_obs
-        return pad_sequence(observations), torch.stack(probs_list), torch.tensor(actions), torch.tensor(rewards), np.array(terms)
+                    
+        padded_observations = pad_sequence(observations)
+        return padded_observations, torch.stack(probs_list), torch.tensor(actions, device=self.device), torch.tensor(rewards, device=self.device), np.array(terms)
 
     def calc_advantages(self, rewards, terminated, gamma=0.9999):
         discounted_rewards, prev_reward = [], 0
@@ -89,7 +95,7 @@ class TReinforce:
             prev_reward = reward + (gamma * prev_reward)
             discounted_rewards.append(prev_reward)
         
-        advantages = torch.tensor(discounted_rewards[::-1], dtype=torch.float)
+        advantages = torch.tensor(discounted_rewards[::-1], dtype=torch.float, device=self.device)
         if self.normed_advantages:
             advantages = (advantages - advantages.mean()) / (advantages.std() + 1e-8)
         return advantages
@@ -103,7 +109,7 @@ class TReinforce:
                 episode_reward = 0
         self.prev_reward = episode_reward
         if episode_rewards:
-            return torch.tensor(episode_rewards, dtype=torch.float).mean()
+            return torch.tensor(episode_rewards, dtype=torch.float, device=self.device).mean()
         else:
             return prev_mean_reward
 
@@ -129,21 +135,22 @@ class TReinforce:
             print(obs.shape)
             print(old_probs.shape)
             for batch in batches:
-                outputs = self.policy(obs[batch])
+                batch_indices = torch.tensor(batch, device=self.device)
+                outputs = self.policy(obs[batch_indices])
                 probs = softmax_temp(outputs.logits[:,-1, :], self.temp)
                 dists = torch.distributions.Categorical(probs)
-                log_probs = dists.log_prob(actions[batch])
-                old_dists = torch.distributions.Categorical(probs=old_probs[batch].detach())
-                old_log_probs = old_dists.log_prob(actions[batch])
+                log_probs = dists.log_prob(actions[batch_indices])
+                old_dists = torch.distributions.Categorical(probs=old_probs[batch_indices].detach())
+                old_log_probs = old_dists.log_prob(actions[batch_indices])
                 r_t = log_probs.exp() / old_log_probs.exp()
                 policy_clip = 0.2
                 
-                loss = -torch.min(r_t * advantages[batch], torch.clamp(r_t, 1 - policy_clip, 1 + policy_clip) * advantages[batch])
+                loss = -torch.min(r_t * advantages[batch_indices], torch.clamp(r_t, 1 - policy_clip, 1 + policy_clip) * advantages[batch_indices])
                 self.optimizer.zero_grad()
                 loss.mean().backward()
                 self.optimizer.step()
 
-                losses.append(loss.detach().mean())
+                losses.append(loss.detach().mean().item())
             if(self.logging):
                 wandb.log({"loss": np.mean(losses), "rewards": mean_reward.item()})
             
