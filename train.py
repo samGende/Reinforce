@@ -38,7 +38,7 @@ if __name__ == '__main__':
 
 
     max_tokens =200 
-    env = GSM8K_Env(tokenizer=tokenizer, max_tokens=max_tokens)
+    env = GSM8K_Env(tokenizer=tokenizer, max_tokens=max_tokens, sparse_reward=True)
     env.reset()
     optimizer = torch.optim.Adam(model.parameters(), lr =0.1)
 

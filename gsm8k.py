@@ -48,7 +48,7 @@ class GSM8K_evaluation:
 
 
 class GSM8K_Env:
-    def __init__(self, tokenizer, max_tokens):
+    def __init__(self, tokenizer, max_tokens, sparse_reward=False):
         ds = load_dataset("openai/gsm8k", "main", streaming=True)
         self.train = ds['train'].shuffle(seed=42)
         self.train_iter = iter(self.train)
@@ -59,6 +59,7 @@ class GSM8K_Env:
         self.state = -1
         self.n_tokens = 0
         self.max_tokens = max_tokens
+        self.sparse_reward = sparse_reward
     '''
     reset the envs state and move to new prompt
     ''' 
@@ -103,4 +104,7 @@ class GSM8K_Env:
         if(correct_answer == proposed_answer):
             return 1
         else:
-            return 0.1
+            if self.sparse_reward:
+                return 0
+            else:
+                return 0.1
