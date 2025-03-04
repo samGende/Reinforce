@@ -85,7 +85,7 @@ class TReinforce:
                     obs = next_obs
                     
         padded_observations = pad_sequence(observations)
-        return padded_observations, torch.stack(probs_list), torch.tensor(actions, device=self.device), torch.tensor(rewards, device=self.device), np.array(terms)
+        return padded_observations, torch.stack(probs_list), torch.tensor(actions, device=self.device), torch.tensor(rewards, device=self.device), torch.tensor(terms, device=self.device)
 
     def calc_advantages(self, rewards, terminated, gamma=0.9999):
         discounted_rewards, prev_reward = [], 0
