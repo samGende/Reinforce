@@ -18,3 +18,11 @@ def extract_answer(completion):
 def check_eos(completion):
     match = EOS_RE.search(completion)
     return match != None
+
+
+def extract_unformated_answer(completion, correct_answer):
+    match = re.search(correct_answer, completion)
+    if match:
+        return str(match.group(0))
+    else:
+        return None

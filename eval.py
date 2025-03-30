@@ -8,11 +8,13 @@ import argparse
 # gather args
 parser = argparse.ArgumentParser()
 parser.add_argument('--model_name', type=str, required=True)
+parser.add_argument('--formatted', type=bool, default=True)
 args = parser.parse_args()  
 
 model_name = args.model_name
+formatted = args.formatted
 
-evaluator = GSM8K_evaluation()
+evaluator = GSM8K_evaluation(formatted=formatted)
 
 # load model 
 tokenizer = AutoTokenizer.from_pretrained(model_name)

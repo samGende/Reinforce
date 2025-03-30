@@ -1,6 +1,6 @@
 import faulthandler
 import sys
-from utils.strings import extract_answer
+from utils.strings import extract_answer, extract_unformated_answer
 import json
 import random
 faulthandler.enable(file=sys.stderr, all_threads=True)
@@ -11,9 +11,10 @@ import torch
 
 
 class GSM8K_evaluation:
-    def __init__(self):
+    def __init__(self, formatted=True):
         ds = load_dataset("openai/gsm8k", "main")
         self.test = ds['test']
+        self.formatted = formatted
         random.seed(10)
 
     def eval(self, model, n_evals=3, output_file="evaluation_results.json"):
@@ -26,7 +27,10 @@ class GSM8K_evaluation:
             
             proposed_answer = model(row['question'])
             correct_answer = extract_answer(row['answer'])
-            extracted_answer = extract_answer(proposed_answer)
+            if self.formatted:
+                extracted_answer = extract_answer(proposed_answer)
+            else:
+                extracted_answer = extract_unformated_answer(proposed_answer, correct_answer)
             
             is_correct = correct_answer == extracted_answer
             correct_answers.append(is_correct)
