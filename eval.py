@@ -23,5 +23,8 @@ model = AutoModelForCausalLM.from_pretrained(model_name)
 model_wrapped = TokenWrapper(model, tokenizer)
 
 output_file = model_name.split("/")[-1] + "_results.json"
+
+deepseek_prompt = 'Please reason step by step, and put your final answer within \boxed{}.'
+
 # evaluate model
-acc, corrects = evaluator.eval(model_wrapped, n_evals=1, output_file=output_file)
+acc, corrects = evaluator.eval(model_wrapped, n_evals=1, output_file=output_file, format_instructions=deepseek_prompt)

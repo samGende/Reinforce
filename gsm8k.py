@@ -17,15 +17,17 @@ class GSM8K_evaluation:
         self.formatted = formatted
         random.seed(10)
 
-    def eval(self, model, n_evals=3, output_file="evaluation_results.json"):
+    def eval(self, model, n_evals=3, output_file="evaluation_results.json", format_instructions=None):
         results = []
         correct_answers = []
         
         for i, row in enumerate(self.test):
             if i >= n_evals:
                 break
-            
-            proposed_answer = model(row['question'])
+            if format_instructions == None:
+                proposed_answer = model(row['question'])
+            else:
+                proposed_answer = model(row['question'] + ' ' + format_instructions)
             correct_answer = extract_answer(row['answer'])
             if self.formatted:
                 extracted_answer = extract_answer(proposed_answer)
