@@ -47,9 +47,9 @@ class GSM8K_evaluation:
             
             print(f'finished row {i}')
         
-        with open(output_file, "w") as f:
-            json.dump(results, f, indent=4)
-        
+            with open(output_file, "w") as f:
+                json.dump(results, f, indent=4)
+            
         return sum(correct_answers) / n_evals, correct_answers
 
 
